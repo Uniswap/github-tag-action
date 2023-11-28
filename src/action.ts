@@ -1,4 +1,5 @@
 import * as core from '@actions/core';
+import { sync as parser } from 'conventional-commits-parser';
 import { gte, inc, parse, ReleaseType, SemVer, valid } from 'semver';
 import { analyzeCommits } from '@semantic-release/commit-analyzer';
 import { generateNotes } from '@semantic-release/release-notes-generator';
@@ -24,6 +25,7 @@ export default async function main() {
   const customTag = core.getInput('custom_tag');
   const releaseBranches = core.getInput('release_branches');
   const preReleaseBranches = core.getInput('pre_release_branches');
+  const scopes = core.getInput('scopes');
   const appendToPreReleaseTag = core.getInput('append_to_pre_release_tag');
   const createAnnotatedTag = /true/i.test(
     core.getInput('create_annotated_tag')
@@ -122,6 +124,18 @@ export default async function main() {
     core.setOutput('previous_tag', previousTag.name);
 
     commits = await getCommits(previousTag.commit.sha, commitRef);
+
+    if (scopes.length) {
+      const lowerCasedScopes = scopes
+        .split(',')
+        .map((scope) => scope.toLowerCase());
+      const isInScope = (scope: string) =>
+        lowerCasedScopes.some((includedScope) => scope === includedScope);
+      commits = commits.filter((commit) => {
+        const scope = parser(commit.message).scope?.toLowerCase();
+        return scope ? isInScope(scope) : false;
+      });
+    }
 
     let bump = await analyzeCommits(
       {
